@@ -1,11 +1,16 @@
 import streamlit as st
-from utils.i18n import pick_language, t, lang as _lang
+from utils.i18n import pick_language, t, lang as _lang, translate_text
 
 DISCLAIMER = 'This educational model estimates a self-reported survey label. It does not diagnose diabetes or predict future disease. Discuss testing and routine screening with a healthcare professional.'
 
 
 def tr(vi, en):
-    return vi if _lang() == 'vi' else en
+    target = _lang()
+    if target == "vi":
+        return vi
+    if target == "en":
+        return en
+    return translate_text(vi, target)
 
 
 def html(s):

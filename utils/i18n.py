@@ -1,13 +1,29 @@
 
-"""Tiny two-language helper for the user-facing pages (Vietnamese default, English optional).
-The 'About & Model' page is written for course reviewers and stays in English."""
+"""Multilingual text helpers. Vietnamese remains the default language."""
 
 import streamlit as st
+from deep_translator import GoogleTranslator
 
-LANGS = {
-    "Tiếng Việt": "vi",
-    "English": "en"
-}
+# All languages currently exposed by Google Translate (100+ language options).
+# This is the practical translation coverage, not every language spoken worldwide.
+_supported = GoogleTranslator.get_supported_languages(as_dict=True)
+LANGS = {name.title(): code for name, code in _supported.items()}
+LANGS["Tiếng Việt"] = "vi"
+LANGS["English"] = "en"
+LANGUAGE_OPTIONS = ["Tiếng Việt", "English"] + sorted(
+    [name for name in LANGS if name not in ("Tiếng Việt", "English")],
+    key=str.casefold,
+)
+
+@st.cache_data(show_spinner=False, ttl=86400)
+def translate_text(text, target):
+    """Translate display text and cache it for one day; preserve source on API failure."""
+    if not text or target in ("vi", "en"):
+        return text
+    try:
+        return GoogleTranslator(source="auto", target=target).translate(str(text)) or str(text)
+    except Exception:
+        return str(text)
 
 AGES_EN = [
     '18–24', '25–29', '30–34', '35–39', '40–44',
@@ -30,34 +46,39 @@ def pick_language():
     if "lang" not in st.session_state:
         st.session_state["lang"] = "vi"
 
-    default_label = (
-        "Tiếng Việt"
-        if st.session_state["lang"] == "vi"
-        else "English"
+    default_label = next(
+        (name for name, code in LANGS.items() if code == st.session_state["lang"]),
+        "Tiếng Việt",
     )
-
     if "lang_label" not in st.session_state:
         st.session_state["lang_label"] = default_label
 
-    st.sidebar.radio(
+    st.sidebar.selectbox(
         "Ngôn ngữ / Language",
-        options=list(LANGS.keys()),
-        horizontal=True,
-        key="lang_label"
+        options=LANGUAGE_OPTIONS,
+        index=LANGUAGE_OPTIONS.index(st.session_state["lang_label"])
+        if st.session_state["lang_label"] in LANGUAGE_OPTIONS else 0,
+        key="lang_label",
     )
-
-    st.session_state["lang"] = LANGS[
-        st.session_state["lang_label"]
-    ]
+    st.session_state["lang"] = LANGS[st.session_state["lang_label"]]
 
 
 def t(key, **kw):
-    s = TEXT[key][lang()]
+    target = lang()
+    source_language = target if target in ("vi", "en") else "vi"
+    s = TEXT[key][source_language]
+    if target not in ("vi", "en"):
+        s = translate_text(s, target)
     return s.format(**kw) if kw else s
 
 
 def age_labels():
-    return AGES_VI if lang() == "vi" else AGES_EN
+    target = lang()
+    if target == "vi":
+        return AGES_VI
+    if target == "en":
+        return AGES_EN
+    return [translate_text(label, target) for label in AGES_VI]
 
 
 def health_labels():
